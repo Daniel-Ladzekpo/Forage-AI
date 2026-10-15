@@ -18,5 +18,6 @@ htmlcov/
 .ruff_cache/
 
 # Editors
-.vscode/
 .idea/
+# NOTE: .vscode/settings.json is intentionally committed — it pins the
+# .venv interpreter (relative ${workspaceFolder} paths) for agents/devs.
