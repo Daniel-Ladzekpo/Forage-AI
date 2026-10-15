@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "forage-ai"
+version = "0.1.0"
+description = "Describe a software need in plain English; get trustworthy open-source picks packaged for Windows."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typer>=0.15",
+    "rich>=14",
+    "httpx>=0.28",
+    "pydantic>=2.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4",
+]
+
+[project.scripts]
+forage = "forage.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forage"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
