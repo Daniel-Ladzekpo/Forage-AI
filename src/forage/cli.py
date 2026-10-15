@@ -8,9 +8,21 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 
 from forage import __version__
 from forage.config import ConfigError, load_settings
+from forage.discovery import (
+    MIN_COMFORTABLE_CANDIDATES,
+    Candidate,
+    DiscoveryService,
+    GitHubAPIError,
+    GitHubSearchClient,
+    format_license,
+    format_stars,
+    maintenance_signal,
+    utcnow,
+)
 from forage.setup_wizard import print_setup
 
 app = typer.Typer(
@@ -46,6 +58,33 @@ def _print_not_implemented(command: str, issues: str) -> None:
         f"[yellow]`forage {command}` is not implemented yet — "
         f"tracked in {issues}.[/yellow]"
     )
+
+
+def _render_candidates(discovery_query: str, candidates: list[Candidate]) -> None:
+    """Render Candidate cards: stars, license, maintenance in plain English."""
+    now = utcnow()
+    console.print(f'[bold]Candidates for[/bold] "{discovery_query}"')
+    for candidate in candidates:
+        lines: list[str] = []
+        if candidate.description:
+            lines.append(candidate.description)
+        lines.append(f"Stars: {format_stars(candidate.stars)}")
+        lines.append(f"License: {format_license(candidate.license_spdx)}")
+        lines.append(
+            f"Maintenance: {maintenance_signal(candidate.pushed_at, now)}"
+        )
+        if candidate.why_pick:
+            lines.append(f"Best for: {candidate.why_pick}")
+        if candidate.why_not:
+            lines.append(f"Tradeoff: {candidate.why_not}")
+        lines.append(candidate.html_url)
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"{candidate.id}. {candidate.full_name}",
+                title_align="left",
+            )
+        )
 
 
 def requires_config(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -97,8 +136,27 @@ def find(
     ),
 ) -> None:
     """Describe what you need; Forage suggests 3-5 trustworthy Candidates."""
-    _print_not_implemented("find", "issues #3 and #4")
-    raise typer.Exit(code=1)
+    settings = load_settings()
+    service = DiscoveryService(GitHubSearchClient(token=settings.github_token))
+    try:
+        candidates = service.search(discovery_query)
+    except GitHubAPIError as exc:
+        console.print(f"[red]Search failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    if not candidates:
+        console.print(
+            f'[yellow]No trustworthy Candidates found[/yellow] for '
+            f'"{discovery_query}".\nArchived and non-OSI-licensed repos are '
+            "dropped by hard filter — try a broader description."
+        )
+        return
+    _render_candidates(discovery_query, candidates)
+    if len(candidates) < MIN_COMFORTABLE_CANDIDATES:
+        noun = "match" if len(candidates) == 1 else "matches"
+        console.print(
+            f"\n[yellow]Only {len(candidates)} trustworthy {noun} found[/yellow]"
+            " — try a broader description for more options."
+        )
 
 
 @app.command("install")
